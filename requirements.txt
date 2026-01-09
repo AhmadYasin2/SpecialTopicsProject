@@ -1,0 +1,50 @@
+# Core Framework
+langgraph>=0.2.0
+langchain>=0.2.0
+langchain-groq>=0.1.0
+langchain-community>=0.2.0
+
+# API Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# UI Framework
+streamlit>=1.30.0
+
+# Academic APIs
+semanticscholar>=0.7.0
+pymed>=0.8.9
+arxiv>=2.1.0
+requests>=2.31.0
+
+# Vector Store & Embeddings
+chromadb>=0.4.22
+sentence-transformers>=2.3.0
+faiss-cpu>=1.7.4
+
+# Data Processing
+pandas>=2.1.0
+numpy>=1.24.0
+matplotlib>=3.8.0
+plotly>=5.18.0
+
+# Document Processing
+python-docx>=1.1.0
+openpyxl>=3.1.2
+reportlab>=4.0.0
+Pillow>=10.1.0
+
+# Utilities
+python-dotenv>=1.0.0
+httpx>=0.26.0
+tenacity>=8.2.3
+tiktoken>=0.5.2
+aiofiles>=23.2.1
+
+# Development
+pytest>=7.4.3
+pytest-asyncio>=0.21.1
+black>=23.12.1
+ruff>=0.1.9
