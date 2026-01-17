@@ -71,10 +71,21 @@ def print_results(result: dict) -> None:
         flow = final_state.get("prisma_flow")
         if flow:
             print(f"\n🔄 PRISMA Flow:")
-            print(f"   • Records identified: {flow['identification']['total_records']}")
-            print(f"   • After duplicates removed: {flow['screening']['records_screened']}")
-            print(f"   • Records excluded: {flow['screening']['records_excluded']}")
-            print(f"   • Studies included: {flow['included']['studies_in_synthesis']}")
+            try:
+                # Handle both dict and Pydantic object
+                if isinstance(flow, dict):
+                    print(f"   • Records identified: {flow['identification']['total_records']}")
+                    print(f"   • After duplicates removed: {flow['screening']['records_screened']}")
+                    print(f"   • Records excluded: {flow['screening']['records_excluded']}")
+                    print(f"   • Studies included: {flow['included']['studies_in_synthesis']}")
+                else:
+                    # Pydantic object
+                    print(f"   • Records identified: {flow.identification['total_records']}")
+                    print(f"   • After duplicates removed: {flow.screening['records_screened']}")
+                    print(f"   • Records excluded: {flow.screening['records_excluded']}")
+                    print(f"   • Studies included: {flow.included['studies_in_synthesis']}")
+            except (KeyError, AttributeError, TypeError) as e:
+                print(f"   (Flow diagram data incomplete)")
         
         # Audit trail
         audit_path = result.get("audit_trail_path")
