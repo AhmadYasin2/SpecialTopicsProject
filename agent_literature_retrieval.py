@@ -427,32 +427,36 @@ class LiteratureRetrievalAgent:
     def _simplify_query_for_database(self, query: str, database: str) -> str:
         """Simplify complex Boolean queries for databases with limited search syntax."""
         if database in ["semantic_scholar", "arxiv"]:
-            # Remove Boolean operators and parentheses - these APIs work better with simple keywords
-            simplified = query
+            # These APIs don't support Boolean operators - they do simple keyword search
+            # Just extract the meaningful keywords from the complex query
             
-            # Remove complex patterns
+            # Remove all Boolean operators and special syntax
+            simplified = query
             simplified = simplified.replace(" AND ", " ")
             simplified = simplified.replace(" OR ", " ")
-            simplified = simplified.replace(" NOT ", " -")
+            simplified = simplified.replace(" NOT ", " ")
             
-            # Remove parentheses and quotes (keep content)
-            simplified = simplified.replace("(", "").replace(")", "")
-            simplified = simplified.replace('"', "")
+            # Remove all parentheses, quotes, brackets
+            for char in ['(', ')', '"', "'", '[', ']', '{', '}']:
+                simplified = simplified.replace(char, " ")
             
-            # Remove wildcards (* and ?)
-            simplified = simplified.replace("*", "").replace("?", "")
+            # Remove wildcards and special characters
+            for char in ['*', '?', ':', ';']:
+                simplified = simplified.replace(char, " ")
             
-            # Remove category prefixes for arXiv
-            if "cat:" in simplified:
-                # Extract just the terms, not the category syntax
-                parts = simplified.split(" AND ")
-                terms = [p for p in parts if not p.strip().startswith("cat:")]
-                simplified = " ".join(terms)
+            # Remove category prefixes for arXiv (cat:cs.SE, etc.)
+            words = simplified.split()
+            cleaned_words = [w for w in words if not w.startswith('cat')]
+            simplified = " ".join(cleaned_words)
             
-            # Clean up extra spaces
-            simplified = " ".join(simplified.split())
+            # Clean up extra spaces and convert to lowercase for consistency
+            simplified = " ".join(simplified.split()).strip()
             
-            logger.debug(f"Simplified '{query[:50]}...' to '{simplified[:50]}...'")
+            # For very long queries, extract just the key terms
+            if len(simplified.split()) > 10:
+                simplified = self._extract_key_terms(simplified)
+            
+            logger.info(f"Query simplification: '{query[:60]}...' → '{simplified[:60]}...'")
             return simplified
         
         return query
