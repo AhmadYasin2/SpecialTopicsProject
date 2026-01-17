@@ -2,6 +2,33 @@
 
 A sophisticated multi-agent system that automates the PRISMA 2020 systematic literature review workflow with full traceability and auditability.
 
+## 🚀 Quick Start (Headless Server / CLI)
+
+For headless servers or command-line usage:
+
+1. **Install dependencies:**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Start Ollama and pull model:**
+
+   ```bash
+   ollama serve
+   ollama pull qwen2.5:32b
+   ```
+
+3. **Run a review:**
+   ```bash
+   python cli.py "Your research question here"
+   ```
+
+📖 **Full guides:**
+
+- **[CLI Usage Guide](CLI_USAGE.md)** - Complete command-line reference
+- **[Headless Setup](HEADLESS_SETUP.md)** - Server setup and troubleshooting
+
 ## 🎯 Overview
 
 AutoPRISMA implements a complete PRISMA 2020-compliant workflow using a multi-agent architecture built with LangGraph. The system provides transparent, reproducible, and auditable systematic reviews.
@@ -30,7 +57,8 @@ AutoPRISMA implements a complete PRISMA 2020-compliant workflow using a multi-ag
 ### Prerequisites
 
 - Python 3.10+
-- Groq API key
+- Ollama installed and running
+- Qwen 32B model pulled (`ollama pull qwen2.5:32b`)
 
 ### Installation
 
@@ -46,14 +74,41 @@ venv\Scripts\activate  # Windows
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure environment
-copy .env.example .env
-# Edit .env with your Groq API key
+# Install and start Ollama
+# Download from: https://ollama.ai
+ollama serve  # Start Ollama server
+ollama pull qwen2.5:32b  # Pull the model
 ```
 
 ### Running the System
 
-#### Option 1: FastAPI Backend
+#### Option 1: Command Line Interface (Recommended for Headless Servers)
+
+```bash
+# Basic usage
+python cli.py "Your research question here"
+
+# With specific databases
+python cli.py "What are the effects of machine learning in healthcare?" --databases pubmed semantic_scholar
+
+# With date range
+python cli.py "Climate change impacts on agriculture" --date-from 2020-01-01 --date-to 2024-12-31
+
+# Enable human-in-the-loop checkpoints
+python cli.py "Systematic review topic" --enable-hitl
+
+# Verbose output
+python cli.py "Your question" --verbose
+
+# Full example
+python cli.py "Effectiveness of cognitive behavioral therapy for anxiety" \
+  --databases pubmed semantic_scholar arxiv \
+  --date-from 2015-01-01 \
+  --date-to 2024-12-31 \
+  --verbose
+```
+
+#### Option 2: FastAPI Backend
 
 ```bash
 # Start the API server
@@ -62,7 +117,7 @@ python main.py
 # API docs at http://localhost:8000/docs
 ```
 
-#### Option 2: Streamlit UI
+#### Option 3: Streamlit UI (Requires Display)
 
 ```bash
 # Start the interactive UI
@@ -70,7 +125,7 @@ streamlit run app.py
 # Access at http://localhost:8501
 ```
 
-#### Option 3: Command Line
+#### Option 4: Direct Orchestrator
 
 ```bash
 # Run the orchestrator directly
@@ -103,12 +158,19 @@ SpecialTopicsProjecty/
 
 ## 🔧 Configuration
 
-Edit `.env` file:
+The system uses Ollama for local LLM inference. Configuration is handled in `config.py`:
+
+```python
+# LLM Configuration (already configured for Ollama)
+ollama_base_url: str = "http://localhost:11434"  # Ollama server URL
+llm_provider: str = "ollama"
+llm_model: str = "qwen2.5:32b"  # Ollama Qwen 32B model
+llm_temperature: float = 0.1
+```
+
+Optional: Add academic API keys to `.env` for improved retrieval:
 
 ```env
-# Required: Groq API Key
-GROQ_API_KEY=gsk_...
-
 # Optional: Academic API Keys (improves retrieval)
 SEMANTIC_SCHOLAR_API_KEY=your_key
 NCBI_API_KEY=your_key
@@ -156,30 +218,40 @@ OPENALEX_EMAIL=your@email.com
 
 ## 🎓 Usage Examples
 
-### Example 1: Basic Systematic Review
+### Example 1: CLI - Basic Systematic Review (Headless Server)
+
+```bash
+# Simple query
+python cli.py "What is the effectiveness of cognitive behavioral therapy for anxiety disorders?"
+
+# With databases and date range
+python cli.py "Effectiveness of cognitive behavioral therapy for anxiety disorders" \
+  --databases pubmed semantic_scholar \
+  --date-from 2015-01-01 \
+  --date-to 2024-12-31 \
+  --verbose
+```
+
+### Example 2: Programmatic Usage
 
 ```python
 from orchestrator import AutoPRISMAOrchestrator
 
 orchestrator = AutoPRISMAOrchestrator()
-result = await orchestrator.run_review(
+result = orchestrator.run_review_sync(
     research_question="What is the effectiveness of cognitive behavioral therapy for anxiety disorders?",
     databases=["pubmed", "semantic_scholar"],
     date_range=("2015-01-01", "2024-12-31")
 )
 
-print(result.summary)
-result.save_report("output/review_report.pdf")
+if result["status"] == "success":
+    print(f"Report saved to: {result['audit_trail_path']}")
 ```
 
-### Example 2: With Human-in-the-Loop
+### Example 3: With Human-in-the-Loop
 
-```python
-result = await orchestrator.run_review(
-    research_question="...",
-    enable_hitl=True,  # Pause for human review at key points
-    hitl_checkpoints=["after_screening_criteria", "after_abstract_evaluation"]
-)
+```bash
+python cli.py "Your research question" --enable-hitl
 ```
 
 ## ⚠️ Important Notes
