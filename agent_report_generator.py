@@ -84,8 +84,7 @@ class ReportGeneratorAgent:
             },
             eligibility={
                 "full_text_articles_assessed": full_text_assessed,
-                "full_text_articles_excluded": full_text_excluded,
-                "excluded_reasons": self._get_exclusion_reasons(excluded_docs, screening_decisions)
+                "full_text_articles_excluded": full_text_excluded
             },
             included={
                 "studies_included_in_synthesis": included_in_synthesis,
