@@ -392,12 +392,16 @@ class LiteratureRetrievalAgent:
             logger.error(f"Unknown database: {database}")
             return []
         
+        # Simplify query for databases that don't support complex Boolean syntax
+        simplified_query = self._simplify_query_for_database(query, database)
+        logger.debug(f"Simplified query for {database}: {simplified_query[:100]}")
+        
         # Use context manager for clients that support it
         if hasattr(client, "__aenter__"):
             async with client as c:
-                raw_papers = await c.search_papers(query, limit, year_range)
+                raw_papers = await c.search_papers(simplified_query, limit, year_range)
         else:
-            raw_papers = await client.search_papers(query, limit, year_range)
+            raw_papers = await client.search_papers(simplified_query, limit, year_range)
         
         # Convert to Document objects
         documents = []
@@ -408,6 +412,39 @@ class LiteratureRetrievalAgent:
         
         logger.info(f"Retrieved {len(documents)} papers from {database}")
         return documents
+    
+    def _simplify_query_for_database(self, query: str, database: str) -> str:
+        """Simplify complex Boolean queries for databases with limited search syntax."""
+        if database in ["semantic_scholar", "arxiv"]:
+            # Remove Boolean operators and parentheses - these APIs work better with simple keywords
+            simplified = query
+            
+            # Remove complex patterns
+            simplified = simplified.replace(" AND ", " ")
+            simplified = simplified.replace(" OR ", " ")
+            simplified = simplified.replace(" NOT ", " -")
+            
+            # Remove parentheses and quotes (keep content)
+            simplified = simplified.replace("(", "").replace(")", "")
+            simplified = simplified.replace('"', "")
+            
+            # Remove wildcards (* and ?)
+            simplified = simplified.replace("*", "").replace("?", "")
+            
+            # Remove category prefixes for arXiv
+            if "cat:" in simplified:
+                # Extract just the terms, not the category syntax
+                parts = simplified.split(" AND ")
+                terms = [p for p in parts if not p.strip().startswith("cat:")]
+                simplified = " ".join(terms)
+            
+            # Clean up extra spaces
+            simplified = " ".join(simplified.split())
+            
+            logger.debug(f"Simplified '{query[:50]}...' to '{simplified[:50]}...'")
+            return simplified
+        
+        return query
     
     def _convert_to_document(self, paper: Dict[str, Any], source: str) -> Optional[Document]:
         """Convert raw API response to Document object."""
