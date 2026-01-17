@@ -394,7 +394,7 @@ class LiteratureRetrievalAgent:
         
         # Simplify query for databases that don't support complex Boolean syntax
         simplified_query = self._simplify_query_for_database(query, database)
-        logger.debug(f"Simplified query for {database}: {simplified_query[:100]}")
+        logger.info(f"Simplified query for {database}: {simplified_query[:100]}...")
         
         # Use context manager for clients that support it
         if hasattr(client, "__aenter__"):
@@ -402,6 +402,17 @@ class LiteratureRetrievalAgent:
                 raw_papers = await c.search_papers(simplified_query, limit, year_range)
         else:
             raw_papers = await client.search_papers(simplified_query, limit, year_range)
+        
+        # If no results and database supports simple queries, try with just key terms
+        if len(raw_papers) == 0 and database in ["semantic_scholar", "arxiv"]:
+            fallback_query = self._extract_key_terms(simplified_query)
+            if fallback_query != simplified_query and len(fallback_query) > 0:
+                logger.info(f"No results with simplified query, trying key terms: {fallback_query}")
+                if hasattr(client, "__aenter__"):
+                    async with client as c:
+                        raw_papers = await c.search_papers(fallback_query, limit, year_range)
+                else:
+                    raw_papers = await client.search_papers(fallback_query, limit, year_range)
         
         # Convert to Document objects
         documents = []
@@ -445,6 +456,28 @@ class LiteratureRetrievalAgent:
             return simplified
         
         return query
+    
+    def _extract_key_terms(self, query: str) -> str:
+        """Extract the most important keywords from a query for fallback search."""
+        # Remove common stop words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
+                      'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be',
+                      'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
+                      'would', 'should', 'could', 'may', 'might', 'must', 'can'}
+        
+        # Split into words and filter
+        words = query.lower().split()
+        key_terms = [w for w in words if len(w) > 2 and w not in stop_words]
+        
+        # Take most significant terms (first 5-6 unique terms)
+        unique_terms = []
+        for term in key_terms:
+            if term not in unique_terms:
+                unique_terms.append(term)
+            if len(unique_terms) >= 6:
+                break
+        
+        return " ".join(unique_terms)
     
     def _convert_to_document(self, paper: Dict[str, Any], source: str) -> Optional[Document]:
         """Convert raw API response to Document object."""
