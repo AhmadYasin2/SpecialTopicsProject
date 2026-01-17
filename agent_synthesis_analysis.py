@@ -4,7 +4,7 @@ Responsible for: Theme extraction, identifying contradictions vs consensus,
 finding research gaps, and generating summary statistics.
 """
 from typing import Dict, Any, List
-from langchain_groq import ChatGroq
+from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
@@ -66,10 +66,10 @@ class SynthesisAnalysisAgent:
     """
     
     def __init__(self):
-        self.llm = ChatGroq(
+        self.llm = ChatOllama(
             model=settings.llm_model,
             temperature=settings.llm_temperature,
-            api_key=settings.groq_api_key
+            base_url=settings.ollama_base_url
         )
         
         self.theme_parser = PydanticOutputParser(pydantic_object=ThemeOutput)

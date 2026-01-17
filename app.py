@@ -293,6 +293,29 @@ def main():
                     if result:
                         summary = result.get('summary', {})
                         
+                        # Auto-download report on first completion
+                        if f'auto_downloaded_{job_id}' not in st.session_state:
+                            st.success("✅ Review completed! Auto-downloading reports...")
+                            
+                            # Try to download all available formats
+                            for fmt in ["html", "markdown"]:
+                                try:
+                                    content = download_report(job_id, fmt)
+                                    if content:
+                                        st.download_button(
+                                            f"⬇️ Download {fmt.upper()} Report",
+                                            content,
+                                            file_name=f"systematic_review_{job_id}.{fmt}",
+                                            mime=f"text/{fmt}",
+                                            key=f"auto_download_{fmt}_{job_id}",
+                                            use_container_width=True
+                                        )
+                                except Exception as e:
+                                    logger.warning(f"Could not auto-download {fmt} report: {e}")
+                            
+                            # Mark as auto-downloaded
+                            st.session_state[f'auto_downloaded_{job_id}'] = True
+                        
                         # Summary metrics
                         col1, col2, col3, col4 = st.columns(4)
                         
@@ -333,35 +356,36 @@ def main():
                             st.metric("Borderline", summary.get('papers_borderline', 0))
                         
                         # Download options
-                        st.markdown("### 📥 Downloads")
+                        st.markdown("### 📥 Download Reports")
+                        st.info("💡 Reports are auto-downloaded when review completes. You can re-download them below.")
                         
                         col1, col2, col3 = st.columns(3)
                         
                         with col1:
-                            if st.button("Download Report (Markdown)", use_container_width=True):
-                                content = download_report(job_id, "markdown")
-                                if content:
-                                    st.download_button(
-                                        "Save Markdown",
-                                        content,
-                                        file_name=f"review_{job_id}.md",
-                                        mime="text/markdown"
-                                    )
+                            content_md = download_report(job_id, "markdown")
+                            if content_md:
+                                st.download_button(
+                                    "📝 Markdown",
+                                    content_md,
+                                    file_name=f"systematic_review_{job_id}.md",
+                                    mime="text/markdown",
+                                    use_container_width=True
+                                )
                         
                         with col2:
-                            if st.button("Download Report (HTML)", use_container_width=True):
-                                content = download_report(job_id, "html")
-                                if content:
-                                    st.download_button(
-                                        "Save HTML",
-                                        content,
-                                        file_name=f"review_{job_id}.html",
-                                        mime="text/html"
-                                    )
+                            content_html = download_report(job_id, "html")
+                            if content_html:
+                                st.download_button(
+                                    "🌐 HTML",
+                                    content_html,
+                                    file_name=f"systematic_review_{job_id}.html",
+                                    mime="text/html",
+                                    use_container_width=True
+                                )
                         
                         with col3:
-                            if st.button("View Audit Trail", use_container_width=True):
-                                st.info(f"Audit trail available at: {result.get('audit_trail_path')}")
+                            if result.get('audit_trail_path'):
+                                st.info(f"📋 [View Audit Trail]({result.get('audit_trail_path')})")
                         
                         # PRISMA Flow Diagram
                         if result.get('diagram_path'):
@@ -418,7 +442,7 @@ def main():
         
         - **Backend**: FastAPI, Uvicorn
         - **Frontend**: Streamlit
-        - **Agents**: LangGraph, LangChain, OpenAI GPT-4
+        - **Agents**: LangGraph, LangChain, Ollama Qwen 32B
         - **Vector Store**: ChromaDB / FAISS
         - **APIs**: Semantic Scholar, PubMed, arXiv, OpenAlex
         

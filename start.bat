@@ -47,7 +47,7 @@ if not exist ".env" (
     echo [4/5] Creating .env file from template...
     copy .env.example .env
     echo.
-    echo IMPORTANT: Please edit .env and add your OpenAI API key
+    echo IMPORTANT: Please edit .env and add your Groq API key
     echo Open .env in notepad: notepad .env
     echo.
     pause

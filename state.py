@@ -4,7 +4,7 @@ Implements TypedDict-based state for LangGraph compatibility.
 """
 from typing import TypedDict, List, Dict, Optional, Annotated, Literal, Any
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 import operator
 
 
@@ -14,12 +14,16 @@ import operator
 
 class Author(BaseModel):
     """Author information."""
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
     name: str
     affiliation: Optional[str] = None
 
 
 class Document(BaseModel):
     """Academic document/paper model."""
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
     id: str = Field(description="Unique identifier")
     title: str
     authors: List[Author] = Field(default_factory=list)
@@ -47,6 +51,8 @@ class Document(BaseModel):
 
 class PICOCriteria(BaseModel):
     """PICO framework for search strategy."""
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
     population: str = Field(description="Target population/participants")
     intervention: str = Field(description="Intervention being studied")
     comparator: Optional[str] = Field(None, description="Comparison/control")
@@ -56,6 +62,8 @@ class PICOCriteria(BaseModel):
 
 class SearchQuery(BaseModel):
     """Structured search query."""
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
     query_id: str
     boolean_query: str = Field(description="Boolean search string")
     mesh_terms: List[str] = Field(default_factory=list, description="MeSH terms")
@@ -70,6 +78,8 @@ class SearchQuery(BaseModel):
 
 class ScreeningCriteria(BaseModel):
     """Inclusion and exclusion criteria."""
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
     inclusion_criteria: List[str] = Field(description="List of inclusion criteria")
     exclusion_criteria: List[str] = Field(description="List of exclusion criteria")
     
@@ -85,6 +95,8 @@ class ScreeningCriteria(BaseModel):
 
 class ScreeningDecision(BaseModel):
     """Decision record for a single paper screening."""
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
     document_id: str
     decision: Literal["include", "exclude", "borderline"]
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence score 0-1")
@@ -106,6 +118,8 @@ class Theme(BaseModel):
 
 class SynthesisResult(BaseModel):
     """Results of synthesis and analysis."""
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
     themes: List[Theme] = Field(default_factory=list)
     research_gaps: List[str] = Field(default_factory=list)
     contradictions: List[Dict[str, str]] = Field(default_factory=list)
@@ -133,6 +147,8 @@ class PRISMAFlowDiagram(BaseModel):
 
 class ReviewReport(BaseModel):
     """Final systematic review report."""
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
     research_question: str
     pico: PICOCriteria
     search_strategy: SearchQuery
@@ -202,9 +218,9 @@ class PRISMAState(TypedDict, total=False):
     # Audit trail
     audit_log: Annotated[List[Dict[str, any]], operator.add]
     
-    # Timestamps
-    started_at: datetime
-    completed_at: Optional[datetime]
+    # Timestamps (stored as ISO format strings for JSON serialization)
+    started_at: str
+    completed_at: Optional[str]
 
 
 # ============================================================================
@@ -228,7 +244,7 @@ def create_initial_state(research_question: str, **kwargs) -> PRISMAState:
         workflow_status="running",
         hitl_checkpoints=kwargs.get("hitl_checkpoints", []),
         hitl_approvals={},
-        started_at=datetime.now(),
+        started_at=datetime.now().isoformat(),
     )
 
 

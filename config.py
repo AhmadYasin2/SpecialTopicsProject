@@ -17,9 +17,9 @@ class Settings(BaseSettings):
     )
     
     # LLM Configuration
-    groq_api_key: Optional[str] = None
-    llm_provider: str = "groq"
-    llm_model: str = "llama-3.3-70b-versatile"  # or "mixtral-8x7b-32768"
+    ollama_base_url: str = "http://localhost:11434"  # Ollama server URL
+    llm_provider: str = "ollama"
+    llm_model: str = "qwen2.5:32b"  # Ollama Qwen 32B model
     llm_temperature: float = 0.1  # Low temperature for reproducibility
     
     # Academic API Keys

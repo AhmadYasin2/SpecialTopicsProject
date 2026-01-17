@@ -4,7 +4,7 @@ Responsible for: PICO extraction, Boolean query construction, MeSH term identifi
 and database-specific query syntax generation.
 """
 from typing import Dict, Any, List
-from langchain_groq import ChatGroq
+from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
@@ -58,10 +58,10 @@ class QueryStrategistAgent:
     
     def __init__(self):
         # Initialize LLM with low temperature for reproducibility
-        self.llm = ChatGroq(
+        self.llm = ChatOllama(
             model=settings.llm_model,
             temperature=settings.llm_temperature,
-            api_key=settings.groq_api_key
+            base_url=settings.ollama_base_url
         )
         
         # Set up parsers
@@ -112,7 +112,7 @@ Be specific and comprehensive. This PICO will drive the entire search strategy.
                 study_types=result.study_types
             )
             
-            logger.info(f"Extracted PICO: {pico.model_dump()}")
+            logger.info(f"Extracted PICO: {pico.model_dump(mode='json')}")
             return pico
             
         except Exception as e:
@@ -268,9 +268,9 @@ Target Databases: {databases}
             agent="QueryStrategist",
             action="generate_search_strategy",
             details={
-                "pico": pico.model_dump(),
+                "pico": pico.model_dump(mode='json'),
                 "queries_generated": len(queries),
-                "queries": [q.model_dump() for q in queries],
+                "queries": [q.model_dump(mode='json') for q in queries],
                 "target_databases": target_databases
             }
         )

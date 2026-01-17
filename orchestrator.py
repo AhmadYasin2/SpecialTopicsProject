@@ -111,8 +111,8 @@ class AutoPRISMAOrchestrator:
             
             if self.audit_trail:
                 self.audit_trail.log_query_generation(
-                    pico=updates["pico_criteria"].model_dump() if updates.get("pico_criteria") else {},
-                    queries=[q.model_dump() for q in updates.get("search_queries", [])]
+                    pico=updates["pico_criteria"].model_dump(mode='json') if updates.get("pico_criteria") else {},
+                    queries=[q.model_dump(mode='json') for q in updates.get("search_queries", [])]
                 )
             
             return {**state, **updates}

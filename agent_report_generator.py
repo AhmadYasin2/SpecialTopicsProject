@@ -505,7 +505,7 @@ class ReportGeneratorAgent:
             "final_report": final_report,
             "current_stage": "report_generation_complete",
             "workflow_status": "completed",
-            "completed_at": datetime.now()
+            "completed_at": datetime.now().isoformat()
         }
         
         # Add audit entry

@@ -268,4 +268,4 @@ class AuditTrail:
         Path(output_path).write_text(html, encoding="utf-8")
         logger.info(f"Audit report saved to {output_path}")
         
-        return output_path
+        return str(output_path)

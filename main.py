@@ -13,6 +13,9 @@ import asyncio
 from datetime import datetime
 from pathlib import Path
 import uuid
+import json
+import pickle
+from contextlib import asynccontextmanager
 
 from config import settings
 from orchestrator import AutoPRISMAOrchestrator
@@ -25,13 +28,34 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# In-memory storage for review jobs (in production, use a database)
+review_jobs: Dict[str, Dict[str, Any]] = {}
+
+# Persistence directory
+JOBS_STORAGE_DIR = Path(settings.state_store_path) / "jobs"
+JOBS_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup and shutdown."""
+    # Startup
+    logger.info("Loading persisted review jobs from disk...")
+    load_jobs_from_disk()
+    logger.info(f"Loaded {len(review_jobs)} jobs from disk")
+    yield
+    # Shutdown (if needed)
+    logger.info("Shutting down...")
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="AutoPRISMA API",
     description="Automated PRISMA 2020 Systematic Literature Review System",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -43,8 +67,91 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory storage for review jobs (in production, use a database)
-review_jobs: Dict[str, Dict[str, Any]] = {}
+
+# ============================================================================
+# PERSISTENCE HELPERS
+# ============================================================================
+
+def save_job_to_disk(job_id: str, job_data: Dict[str, Any]) -> None:
+    """Save a job to disk for persistence."""
+    try:
+        job_file = JOBS_STORAGE_DIR / f"{job_id}.json"
+        # Convert to JSON-serializable format
+        serializable_data = {
+            "job_id": job_data["job_id"],
+            "status": job_data["status"],
+            "research_question": job_data["research_question"],
+            "started_at": job_data["started_at"],
+            "progress": job_data.get("progress", 0.0),
+            "current_stage": job_data.get("current_stage"),
+            "completed_at": job_data.get("completed_at"),
+            "error_message": job_data.get("error_message"),
+            "request": job_data.get("request", {})
+        }
+        
+        # For completed jobs, save result metadata (not full state to avoid large files)
+        if job_data["status"] == "completed" and "result" in job_data:
+            result = job_data["result"]
+            final_state = result.get("final_state", {})
+            final_report = final_state.get("final_report")
+            
+            if final_report:
+                serializable_data["result_metadata"] = {
+                    "report_paths": final_report.metadata.get("report_paths", {}),
+                    "diagram_path": final_report.metadata.get("diagram_path"),
+                    "research_question": final_report.research_question,
+                    "included_papers_count": len(final_report.included_papers),
+                    "themes_count": len(final_report.synthesis.themes) if final_report.synthesis else 0
+                }
+        
+        job_file.write_text(json.dumps(serializable_data, indent=2), encoding="utf-8")
+        logger.debug(f"Saved job {job_id} to disk")
+    except Exception as e:
+        logger.error(f"Failed to save job {job_id} to disk: {e}")
+
+
+def load_jobs_from_disk() -> None:
+    """Load all saved jobs from disk into memory."""
+    try:
+        for job_file in JOBS_STORAGE_DIR.glob("*.json"):
+            try:
+                job_data = json.loads(job_file.read_text(encoding="utf-8"))
+                job_id = job_data["job_id"]
+                
+                # Only load completed jobs with valid report paths
+                if job_data["status"] == "completed" and "result_metadata" in job_data:
+                    # Reconstruct minimal job structure needed for report access
+                    result_meta = job_data["result_metadata"]
+                    report_paths = result_meta.get("report_paths", {})
+                    
+                    # Verify at least one report file exists
+                    if any(Path(p).exists() for p in report_paths.values()):
+                        # Create minimal ReviewReport object for report serving
+                        from state import ReviewReport, PRISMAFlowDiagram, SynthesisResult, PICOCriteria, SearchQuery, ScreeningCriteria
+                        
+                        # Minimal objects - just enough for report download
+                        mock_report = type('MockReport', (), {
+                            'metadata': result_meta,
+                            'report_path': report_paths.get('markdown')
+                        })()
+                        
+                        review_jobs[job_id] = {
+                            **job_data,
+                            "result": {
+                                "final_state": {
+                                    "final_report": mock_report
+                                }
+                            },
+                            "_loaded_from_disk": True
+                        }
+                        logger.info(f"Loaded completed job {job_id} from disk")
+                    else:
+                        logger.warning(f"Skipping job {job_id} - report files not found")
+                        
+            except Exception as e:
+                logger.error(f"Failed to load job from {job_file}: {e}")
+    except Exception as e:
+        logger.error(f"Failed to load jobs from disk: {e}")
 
 
 # ============================================================================
@@ -107,6 +214,7 @@ async def run_review_background(job_id: str, request: ReviewRequest):
         logger.info(f"Starting review job {job_id}")
         review_jobs[job_id]["status"] = "running"
         review_jobs[job_id]["current_stage"] = "initializing"
+        save_job_to_disk(job_id, review_jobs[job_id])
         
         # Prepare date range
         date_range = None
@@ -126,17 +234,20 @@ async def run_review_background(job_id: str, request: ReviewRequest):
         if result["status"] == "success":
             review_jobs[job_id]["status"] = "completed"
             review_jobs[job_id]["result"] = result
-            review_jobs[job_id]["completed_at"] = datetime.now()
+            review_jobs[job_id]["completed_at"] = datetime.now().isoformat()
+            save_job_to_disk(job_id, review_jobs[job_id])
             logger.info(f"Review job {job_id} completed successfully")
         else:
             review_jobs[job_id]["status"] = "failed"
             review_jobs[job_id]["error_message"] = result.get("error", "Unknown error")
+            save_job_to_disk(job_id, review_jobs[job_id])
             logger.error(f"Review job {job_id} failed: {result.get('error')}")
     
     except Exception as e:
         logger.error(f"Review job {job_id} failed with exception: {e}", exc_info=True)
         review_jobs[job_id]["status"] = "failed"
         review_jobs[job_id]["error_message"] = str(e)
+        save_job_to_disk(job_id, review_jobs[job_id])
 
 
 # ============================================================================
@@ -179,9 +290,9 @@ async def create_review(request: ReviewRequest, background_tasks: BackgroundTask
         "job_id": job_id,
         "status": "pending",
         "research_question": request.research_question,
-        "started_at": datetime.now(),
+        "started_at": datetime.now().isoformat(),
         "progress": 0.0,
-        "request": request.model_dump()
+        "request": request.model_dump(mode='json')
     }
     
     # Start background task
@@ -282,31 +393,56 @@ async def get_review_result(job_id: str):
 @app.get("/reviews/{job_id}/report")
 async def download_report(job_id: str, format: str = "markdown"):
     """Download the generated report in specified format."""
+    logger.info(f"Request to download report for job {job_id}, format: {format}")
+    logger.debug(f"Available jobs: {list(review_jobs.keys())}")
+    
     if job_id not in review_jobs:
-        raise HTTPException(status_code=404, detail="Review job not found")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Review job '{job_id}' not found. The job may have been deleted or the server was restarted. In-memory storage is used, so jobs are lost on restart."
+        )
     
     job = review_jobs[job_id]
+    logger.debug(f"Job status: {job['status']}")
     
     if job["status"] != "completed":
-        raise HTTPException(status_code=400, detail="Review not completed yet")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Review not completed yet. Current status: {job['status']}"
+        )
     
     result = job.get("result", {})
     final_state = result.get("final_state", {})
     final_report = final_state.get("final_report")
     
+    logger.debug(f"Final report exists: {final_report is not None}")
+    
     if not final_report:
-        raise HTTPException(status_code=404, detail="Report not found")
+        raise HTTPException(
+            status_code=404, 
+            detail="Report not found in completed job. The review may have failed during report generation."
+        )
     
     # Get report path for requested format
     report_paths = final_report.metadata.get("report_paths", {})
     file_path = report_paths.get(format.lower())
     
-    if not file_path or not Path(file_path).exists():
+    logger.debug(f"Report paths available: {list(report_paths.keys())}")
+    logger.debug(f"Requested file path: {file_path}")
+    
+    if not file_path:
         raise HTTPException(
             status_code=404,
-            detail=f"Report format '{format}' not available. Available: {list(report_paths.keys())}"
+            detail=f"Report format '{format}' not generated. Available formats: {list(report_paths.keys())}"
         )
     
+    if not Path(file_path).exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Report file not found at path: {file_path}. The file may have been deleted."
+        )
+    
+    logger.info(f"Serving report file: {file_path}")
     return FileResponse(
         path=file_path,
         filename=f"systematic_review_{job_id}.{format}",
@@ -346,15 +482,18 @@ async def list_reviews():
             "job_id": job_id,
             "status": job["status"],
             "research_question": job["research_question"],
-            "started_at": job["started_at"].isoformat(),
-            "completed_at": job.get("completed_at").isoformat() if job.get("completed_at") else None
+            "started_at": job["started_at"],
+            "completed_at": job.get("completed_at")
         }
         for job_id, job in review_jobs.items()
     ]
     
+    logger.info(f"Listing {len(jobs_list)} review jobs")
+    
     return {
         "total": len(jobs_list),
-        "jobs": jobs_list
+        "jobs": jobs_list,
+        "note": "Jobs are stored in memory and cleared on server restart"
     }
 
 

@@ -30,7 +30,7 @@ AutoPRISMA implements a complete PRISMA 2020-compliant workflow using a multi-ag
 ### Prerequisites
 
 - Python 3.10+
-- OpenAI or Anthropic API key
+- Groq API key
 
 ### Installation
 
@@ -48,7 +48,7 @@ pip install -r requirements.txt
 
 # Configure environment
 copy .env.example .env
-# Edit .env with your API keys
+# Edit .env with your Groq API key
 ```
 
 ### Running the System
@@ -106,8 +106,8 @@ SpecialTopicsProjecty/
 Edit `.env` file:
 
 ```env
-# Required: LLM API Key
-OPENAI_API_KEY=sk-...
+# Required: Groq API Key
+GROQ_API_KEY=gsk_...
 
 # Optional: Academic API Keys (improves retrieval)
 SEMANTIC_SCHOLAR_API_KEY=your_key

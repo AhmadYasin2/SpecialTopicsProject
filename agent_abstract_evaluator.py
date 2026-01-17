@@ -4,7 +4,7 @@ Responsible for: Batch screening of abstracts, confidence scoring, bias detectio
 and comprehensive audit trail of decisions.
 """
 from typing import Dict, Any, List, Literal
-from langchain_groq import ChatGroq
+from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
@@ -73,10 +73,10 @@ class AbstractEvaluatorAgent:
     """
     
     def __init__(self):
-        self.llm = ChatGroq(
+        self.llm = ChatOllama(
             model=settings.llm_model,
             temperature=settings.llm_temperature,
-            api_key=settings.groq_api_key
+            base_url=settings.ollama_base_url
         )
         
         self.parser = PydanticOutputParser(pydantic_object=SingleScreeningResult)
