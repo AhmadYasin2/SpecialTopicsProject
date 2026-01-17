@@ -171,12 +171,6 @@ Available databases: pubmed, semantic_scholar, arxiv, openalex
         help="Enable verbose logging output"
     )
     
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        help="Custom output directory for reports (default: data/documents/reports)"
-    )
-    
     args = parser.parse_args()
     
     # Setup
@@ -221,8 +215,7 @@ Available databases: pubmed, semantic_scholar, arxiv, openalex
             research_question=args.query,
             databases=args.databases,
             date_range=date_range,
-            enable_hitl=args.enable_hitl,
-            user_preferences={"output_dir": args.output_dir} if args.output_dir else None
+            enable_hitl=args.enable_hitl
         )
         
         # Print results
