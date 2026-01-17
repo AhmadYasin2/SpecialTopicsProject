@@ -91,7 +91,16 @@ class AutoPRISMAOrchestrator:
             }
         )
         
-        workflow.add_edge("abstract_evaluator", "synthesis_analysis")
+        # Conditional edge after abstract evaluation
+        workflow.add_conditional_edges(
+            "abstract_evaluator",
+            self._should_run_synthesis,
+            {
+                "continue": "synthesis_analysis",
+                "skip": "report_generator"
+            }
+        )
+        
         workflow.add_edge("synthesis_analysis", "report_generator")
         workflow.add_edge("report_generator", END)
         
@@ -191,6 +200,11 @@ class AutoPRISMAOrchestrator:
             logger.info("🔬 Running Synthesis & Analysis Agent...")
             updates = self.synthesis_analysis.run(state)
             
+            # Check if synthesis returned an error
+            if updates.get("error_message"):
+                logger.error(f"Synthesis returned error: {updates['error_message']}")
+                return {**state, **updates, "workflow_status": "failed"}
+            
             if self.audit_trail:
                 synthesis = updates.get("synthesis_result")
                 if synthesis:
@@ -202,7 +216,7 @@ class AutoPRISMAOrchestrator:
             
             return {**state, **updates}
         except Exception as e:
-            logger.error(f"Synthesis & Analysis failed: {e}")
+            logger.error(f"Synthesis & Analysis failed: {e}", exc_info=True)
             return {**state, "error_message": str(e), "workflow_status": "failed"}
     
     def _run_report_generator(self, state: PRISMAState) -> PRISMAState:
@@ -223,6 +237,23 @@ class AutoPRISMAOrchestrator:
         except Exception as e:
             logger.error(f"Report Generator failed: {e}")
             return {**state, "error_message": str(e), "workflow_status": "failed"}
+    
+    # ========================================================================
+    # CONDITIONAL LOGIC
+    # ========================================================================
+    
+    def _should_run_synthesis(self, state: PRISMAState) -> str:
+        """Determine if synthesis should run based on included papers."""
+        included_docs = state.get("included_documents", [])
+        
+        if len(included_docs) == 0:
+            logger.warning("⚠️  No papers included - skipping synthesis")
+            return "skip"
+        
+        if len(included_docs) < 3:
+            logger.warning(f"⚠️  Only {len(included_docs)} papers included - synthesis may be limited")
+        
+        return "continue"
     
     # ========================================================================
     # HUMAN-IN-THE-LOOP

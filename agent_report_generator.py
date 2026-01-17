@@ -281,42 +281,56 @@ class ReportGeneratorAgent:
         
         # 3.2 Study Characteristics
         report.append("### 3.2 Study Characteristics\n\n")
-        stats = synthesis.summary_statistics
-        report.append(f"- **Total studies:** {stats['total_papers']}\n")
-        if stats['year_range']:
-            report.append(f"- **Year range:** {stats['year_range'][0]}-{stats['year_range'][1]}\n")
-        report.append(f"- **Average authors per paper:** {stats['average_authors_per_paper']:.1f}\n\n")
+        if synthesis and synthesis.summary_statistics:
+            stats = synthesis.summary_statistics
+            report.append(f"- **Total studies:** {stats.get('total_papers', len(included_docs))}\n")
+            if stats.get('year_range'):
+                report.append(f"- **Year range:** {stats['year_range'][0]}-{stats['year_range'][1]}\n")
+            if stats.get('average_authors_per_paper'):
+                report.append(f"- **Average authors per paper:** {stats['average_authors_per_paper']:.1f}\n")
+        else:
+            report.append(f"- **Total studies:** {len(included_docs)}\n")
+        report.append("\n")
         
         # 3.3 Synthesis of Findings
         report.append("### 3.3 Synthesis of Findings\n\n")
         
-        # Themes
-        report.append("**Major Themes:**\n\n")
-        for theme in synthesis.themes:
-            report.append(f"**{theme.name}** (*{theme.strength} evidence*)\n")
-            report.append(f"{theme.description}\n\n")
+        if synthesis:
+            # Themes
+            report.append("**Major Themes:**\n\n")
+            if synthesis.themes:
+                for theme in synthesis.themes:
+                    report.append(f"**{theme.name}** (*{theme.strength} evidence*)\n")
+                    report.append(f"{theme.description}\n\n")
+            else:
+                report.append("No themes were identified.\n\n")
         
-        # Consensus
-        if synthesis.consensus_findings:
-            report.append("**Areas of Consensus:**\n\n")
-            for finding in synthesis.consensus_findings:
-                report.append(f"- {finding}\n")
-            report.append("\n")
-        
-        # Contradictions
-        if synthesis.contradictions:
-            report.append("**Areas of Contradiction:**\n\n")
-            for contradiction in synthesis.contradictions:
-                report.append(f"- {contradiction}\n")
-            report.append("\n")
+            # Consensus
+            if synthesis.consensus_findings:
+                report.append("**Areas of Consensus:**\n\n")
+                for finding in synthesis.consensus_findings:
+                    report.append(f"- {finding}\n")
+                report.append("\n")
+            
+            # Contradictions
+            if synthesis.contradictions:
+                report.append("**Areas of Contradiction:**\n\n")
+                for contradiction in synthesis.contradictions:
+                    report.append(f"- {contradiction}\n")
+                report.append("\n")
+        else:
+            report.append("Synthesis analysis was not completed.\n\n")
         
         # 4. Discussion
         report.append("## 4. Discussion\n\n")
         
         # Research gaps
         report.append("### 4.1 Research Gaps\n\n")
-        for gap in synthesis.research_gaps:
-            report.append(f"- {gap}\n")
+        if synthesis and synthesis.research_gaps:
+            for gap in synthesis.research_gaps:
+                report.append(f"- {gap}\n")
+        else:
+            report.append("Research gap analysis was not completed.\n")
         report.append("\n")
         
         # Limitations
@@ -329,8 +343,11 @@ class ReportGeneratorAgent:
         # 5. Conclusion
         report.append("## 5. Conclusion\n\n")
         report.append(f"This systematic review synthesized {len(included_docs)} studies addressing {research_question.lower()}. ")
-        report.append(f"The findings revealed {len(synthesis.themes)} major themes and identified {len(synthesis.research_gaps)} research gaps. ")
-        report.append("Further research is needed in the areas identified.\n\n")
+        if synthesis:
+            report.append(f"The findings revealed {len(synthesis.themes)} major themes and identified {len(synthesis.research_gaps)} research gaps. ")
+            report.append("Further research is needed in the areas identified.\n\n")
+        else:
+            report.append("Detailed synthesis and analysis are pending completion.\n\n")
         
         # 6. References
         report.append("## 6. References\n\n")
@@ -442,6 +459,22 @@ class ReportGeneratorAgent:
         excluded_docs = state.get("excluded_documents", [])
         borderline_docs = state.get("borderline_documents", [])
         synthesis = state.get("synthesis_result")
+        
+        # Check if synthesis is missing and create a minimal one
+        if synthesis is None:
+            logger.warning("Synthesis result is missing, creating minimal synthesis")
+            from state import SynthesisResult
+            synthesis = SynthesisResult(
+                themes=[],
+                research_gaps=[],
+                contradictions=[],
+                consensus_findings=[],
+                summary_statistics={
+                    "total_papers": len(included_docs),
+                    "year_range": None,
+                    "average_authors_per_paper": 0
+                }
+            )
         
         # Step 1: Generate PRISMA flow diagram
         logger.info("Step 1: Generating PRISMA flow diagram")
