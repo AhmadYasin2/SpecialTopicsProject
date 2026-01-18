@@ -326,5 +326,126 @@ Educational use only. Not for commercial deployment.
 - Academic API providers
 
 ---
+## 🤖 AI Usage
 
-**Disclaimer**: This system is a demonstration prototype for educational purposes. All results must be validated by qualified domain experts before any real-world use. The system does not replace human expertise in systematic reviews.
+### 1) Project Concept Planning
+
+Below are  prompts that was used with an LLM to plan and understand how to implement this project (AutoPRISMA: an automated PRISMA 2020 systematic literature review system). Sample outputs are provided to show the kind of guidance an LLM would return.
+
+#### Prompt 1 — System overview and PRISMA mapping
+**Prompt:**
+> I want to build “AutoPRISMA”, a PRISMA 2020-compliant systematic literature review automation tool using a multi-agent workflow. Propose a high-level architecture (agents + orchestrator), map each agent to PRISMA steps, and describe inputs/outputs for each stage. Keep it implementable in Python.
+
+**Sample output :**
+- **Goal:** Automate PRISMA-like pipeline with traceability.
+- **Agents (pipeline):**
+  1. **Query Strategist**
+     - **Input:** research question
+     - **Output:** PICO fields, Boolean queries per database, keywords/MeSH list
+     - **PRISMA mapping:** “Information sources” + “Search strategy”
+  2. **Literature Retrieval**
+     - **Input:** database queries + filters (date range, databases)
+     - **Output:** normalized list of records (title/authors/abstract/doi/url), deduped
+     - **PRISMA mapping:** “Search and selection” (identification)
+  3. **Screening Criteria**
+     - **Input:** research question + domain constraints
+     - **Output:** inclusion/exclusion criteria + screening protocol text
+     - **PRISMA mapping:** “Eligibility criteria”
+  4. **Abstract Evaluator**
+     - **Input:** records + criteria
+     - **Output:** include/exclude + reasons + confidence score; audit log entries
+     - **PRISMA mapping:** “Study selection”
+  5. **Synthesis & Analysis**
+     - **Input:** included studies + extracted key fields
+     - **Output:** themes, evidence summary, gaps, contradictions, limitations
+     - **PRISMA mapping:** “Synthesis methods” + “Results”
+  6. **Report Generator**
+     - **Input:** pipeline artifacts + counts + decisions
+     - **Output:** PRISMA flow counts, tables, narrative report, exports (PDF/DOCX/CSV)
+     - **PRISMA mapping:** “Reporting” + “PRISMA flow diagram”
+  7. **Orchestrator**
+     - **Responsibilities:** state transitions, retries, caching, checkpoints, HITL approvals
+- **Traceability:** Store every agent decision with timestamps, inputs, outputs, and references to source records.
+
+#### Prompt 2 — State model + audit trail design
+**Prompt:**
+> Design a minimal but solid “state” object for a multi-agent PRISMA pipeline in Python. I need reproducibility and auditability: each step should log inputs, outputs, and decisions. Propose data models (Pydantic/dataclasses), what should be persisted, and an audit log schema.
+
+**Sample output :**
+- **Core state fields:**
+  - `research_question: str`
+  - `databases: list[str]`
+  - `date_range: tuple[str, str] | None`
+  - `queries: dict[str, str]` (db -> query string)
+  - `records: list[Record]`
+  - `deduped_records: list[Record]`
+  - `criteria: ScreeningCriteria`
+  - `screening_results: list[ScreenDecision]`
+  - `included_records: list[Record]`
+  - `synthesis: SynthesisResult`
+  - `artifacts: dict[str, str]` (paths to outputs)
+- **Record model (normalized):**
+  - `title, abstract, year, authors, doi, url, source_db, retrieved_at`
+- **Audit log schema (append-only JSONL):**
+  - `timestamp`, `agent_name`, `action`
+  - `input_summary` (hash + short preview)
+  - `output_summary` (hash + short preview)
+  - `decision` (e.g., include/exclude + reason)
+  - `record_ids_affected`
+  - `errors` (if any)
+- **Persistence:**
+  - Save `state.json` checkpoints at each transition
+  - Save `audit.jsonl` for full provenance
+  - Save deterministic settings: model name, temperature, seed (if applicable)
+
+#### Prompt 3 — Retrieval + deduplication strategy
+**Prompt:**
+> I will retrieve papers from Semantic Scholar, OpenAlex, PubMed, and arXiv. Propose a retrieval strategy including normalization, rate limiting, error handling, and deduplication. Also suggest what identifiers to use and how to merge duplicates.
+
+**Sample output :**
+- **Retrieval strategy:**
+  - Build per-source adapters returning a common `Record` schema.
+  - Implement paging + exponential backoff on HTTP 429/5xx.
+  - Cache raw responses locally to avoid re-fetching.
+- **Identifiers (priority order):**
+  1. DOI (best unique identifier)
+  2. PubMed ID / arXiv ID (source-specific but strong)
+  3. Title + year + first author (fallback)
+- **Deduplication approach:**
+  - Exact match on DOI when present.
+  - Otherwise fuzzy match on normalized title (lowercase, strip punctuation) with similarity threshold.
+  - Merge fields:
+    - keep richest abstract
+    - union of URLs and source databases
+    - preserve provenance (which source provided which field)
+- **Output:**
+  - `deduped_records` plus a `duplicate_map` (canonical_id -> merged_ids)
+
+#### Prompt 4 — Screening + confidence scoring + HITL checkpoints
+**Prompt:**
+> For the abstract screening step, I want the LLM to output include/exclude decisions with reasons and a confidence score, and I want a “human-in-the-loop” checkpoint for borderline cases. Propose the prompt format, the output JSON schema, and the decision thresholds.
+
+**Sample output :**
+- **LLM prompt structure:**
+  - System: “You are a systematic review screener… follow the criteria strictly.”
+  - Provide: inclusion/exclusion criteria + a single abstract + metadata
+  - Require: JSON only (no extra text)
+- **Output schema:**
+  ```json
+  {
+    "decision": "include|exclude|maybe",
+    "confidence": 0.0,
+    "reasons": ["..."],
+    "criteria_matched": {
+      "inclusion": ["..."],
+      "exclusion": ["..."]
+    },
+    "bias_flags": ["population mismatch", "unclear intervention"]
+  }
+  ```
+- **Thresholds:**
+  - `confidence >= 0.80` and decision is include/exclude -> auto-accept
+  - `0.50 <= confidence < 0.80` or decision == maybe -> require HITL approval
+  - `confidence < 0.50` -> default to HITL (or conservative exclude depending on protocol)
+- **Audit:**
+  - Log the criteria version/hash used for each decision to ensure reproducibility
